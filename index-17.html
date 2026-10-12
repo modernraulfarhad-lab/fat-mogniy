@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FAT Mogniy</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging-compat.js"></script>
+  <style>
+    *{box-sizing:border-box}body{margin:0;font-family:system-ui,sans-serif}
+    .hidden{display:none!important}.contact-item{cursor:pointer}
+    .contact-item:hover,.contact-item.active{background:#27272a}
+    .message{max-width:82%;overflow-wrap:anywhere}.message.mine{margin-left:auto;background:#2563eb;color:white}
+    .message.theirs{margin-right:auto;background:#27272a;color:white}
+    /* Вертикальная компоновка и фиксированная высота приложения */
+    html,body{width:100%;height:100%;height:100dvh;overflow:hidden}
+    body{min-height:0!important;overscroll-behavior:none}
+    #appScreen{height:100%;height:100dvh;overflow:hidden;display:flex;flex-direction:column;min-height:0}
+    #workspace{display:flex;flex-direction:column;flex:1;min-height:0;height:calc(100% - 68px);overflow:hidden}
+    #contactsPane{display:flex;flex:0 0 42%;height:42%;min-height:0;max-height:48%;overflow:hidden;border-bottom:1px solid #27272a}
+    #contactsList{min-height:0;overflow-y:auto;overscroll-behavior:contain}
+    #chatPane{display:flex;flex:1 1 0;height:0;min-height:0;overflow:hidden}
+    #chatPane.hidden{display:none!important}
+    #contactsPane.hidden{display:none!important}
+    #profilePane.hidden,#groupsPane.hidden{display:none!important}
+    #searchResult{max-height:72px;overflow-y:auto;flex-shrink:0}
+    #searchStatus{flex-shrink:0;max-height:42px;overflow-y:auto}
+    #messagesList{flex:1 1 0;min-height:0;height:0;overflow-y:auto;overscroll-behavior:contain;overflow-wrap:anywhere;align-content:start}
+    #messageForm{flex-shrink:0;padding-bottom:max(.75rem,env(safe-area-inset-bottom))}
+    #bottomNav{flex:0 0 auto;height:68px;padding-bottom:env(safe-area-inset-bottom);display:flex;justify-content:space-around;align-items:stretch;background:#18181b;border-top:1px solid #27272a;z-index:5}
+    .nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;border:0;background:transparent;color:#a1a1aa;font:inherit;font-size:12px}
+    .nav-btn.active{color:#fff;background:#27272a}
+    .language-btn{color:#d4d4d8;transition:background .15s,border-color .15s}
+    .language-btn.active{background:#f4f4f5;color:#18181b;border-color:#f4f4f5;font-weight:700}
+    .page-panel{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain}
+    #authScreen{height:100%;height:100dvh;min-height:0!important;overflow-y:auto}
+    @media (min-width:700px){#workspace{max-width:680px;width:100%;margin:0 auto;border-left:1px solid #27272a;border-right:1px solid #27272a}#contactsPane{flex-basis:38%;height:38%}}
+    /* FAT Mogniy v1.5: light-blue and black theme */
+    body{background:#dff2ff!important;color:#07111f!important}
+    #appScreen{background:#eaf7ff}
+    #globalHeader{flex:0 0 auto;background:#bfe6ff;border-color:#83cfff;color:#06101d;box-shadow:0 2px 10px #0a223315;z-index:6}
+    #versionBadge{background:#07111f;color:#c9ecff}
+    #workspace{width:100%;max-width:760px;margin:0 auto;flex:1;height:auto!important;background:#eaf7ff;border-left:1px solid #b6ddf5;border-right:1px solid #b6ddf5}
+    #contactsPane,#chatPane,#profilePane,#groupsPane,#callsPane{background:#eaf7ff!important;color:#07111f!important;border-color:#b6ddf5!important}
+    #contactsPane{flex:1 1 auto;width:100%;height:auto;max-height:none;border-bottom:0}
+    #contactsPane>header{display:none}
+    .page-heading-row h2,#groupsHeading,#profileHeading,#callsHeading{font-size:1.25rem;line-height:1.75rem;font-weight:700;color:#07111f}
+    #chatPane{flex:1 1 auto;width:100%;height:auto}
+    #chatPane header,#groupsPane header{border-color:#b6ddf5!important}
+    #bottomNav{background:#07111f;border-color:#16334b}
+    .nav-btn{color:#a9c5d9}.nav-btn.active{color:#07111f;background:#bfe6ff}
+    .contact-item{border:1px solid #c1e3f8;background:#fff;color:#07111f}
+    .contact-item:hover,.contact-item.active{background:#bfe6ff}
+    .message.theirs{background:#fff;color:#07111f;border:1px solid #c5e5f8}
+    .message.mine{background:#07111f;color:#eaf7ff}
+    input,textarea{background:#fff!important;color:#07111f!important;border-color:#9bcde9!important}
+    button{transition:filter .12s}
+    .bg-zinc-950,.bg-zinc-900,.bg-zinc-800,.bg-zinc-700{background-color:#fff!important;color:#07111f!important}
+    .border-zinc-800,.border-zinc-700{border-color:#b6ddf5!important}
+    .text-zinc-400,.text-zinc-500,.text-zinc-300{color:#49677e!important}
+    .bg-blue-600{background-color:#168bd1!important;color:#fff!important}
+    .hover\:bg-blue-500:hover{background-color:#0874b5!important}
+    #messageForm{background:#dff2ff;border-color:#b6ddf5!important}
+    #searchResult button{background:#bfe6ff!important;color:#07111f!important}
+    #backToContacts{background:#07111f;color:#dff2ff}
+    #backToGroups{background:#07111f;color:#dff2ff}
+    #groupsList .contact-item{min-height:70px}
+    #groupsList .contact-item:hover,#groupsList .contact-item.active{background:#bfe6ff}
+    #groupMessageForm{flex-shrink:0;padding-bottom:max(.75rem,env(safe-area-inset-bottom));background:#dff2ff;border-color:#b6ddf5!important}
+    #authScreen{background:#dff2ff}
+    .avatar-dot{width:42px;height:42px;min-width:42px;border-radius:9999px;display:inline-flex;align-items:center;justify-content:center;color:#07111f;font-weight:800;border:2px solid #fff;box-shadow:0 0 0 1px #9bcde9}
+    .avatar-dot.small{width:38px;height:38px;min-width:38px;font-size:14px}
+    .avatar-palette{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px}
+    .avatar-color{width:34px;height:34px;border-radius:9999px;border:3px solid #fff;box-shadow:0 0 0 1px #9bcde9;justify-self:center}
+    .avatar-color.active{outline:3px solid #07111f;outline-offset:2px}
+    #chatAvatar{flex-shrink:0}
+    #notificationToast{position:fixed;z-index:1000;top:14px;left:50%;transform:translateX(-50%);width:min(92vw,440px);background:#07111f;color:#eaf7ff;border:1px solid #60a5fa;border-radius:16px;padding:12px 14px;display:flex;align-items:center;gap:11px;box-shadow:0 12px 35px #0005;opacity:0;pointer-events:none;transition:opacity .18s ease,top .18s ease}
+    #notificationToast.show{opacity:1;top:20px}
+    #notificationToast .toast-avatar{width:38px;height:38px;min-width:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#07111f;font-weight:800;border:2px solid #fff}
+    #notificationToast .toast-content{min-width:0;flex:1}
+    #notificationToast .toast-name{font-weight:800;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    #notificationToast .toast-message{font-size:13px;color:#c7e7ff;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+    #authScreen>div{background:#fff!important;border-color:#b6ddf5!important;color:#07111f}
+    @media (min-width:700px){#workspace{max-width:760px}}
+
+  </style>
+</head>
+<body class="bg-zinc-950 text-white min-h-screen">
+  <div id="notificationToast" role="status" aria-live="polite"><div id="toastAvatar" class="toast-avatar">🔔</div><div class="toast-content"><div id="toastName" class="toast-name">FAT Mogniy</div><div id="toastMessage" class="toast-message"></div></div><span aria-hidden="true">🔔</span></div>
+  <div id="authScreen" class="min-h-screen flex items-center justify-center p-4">
+    <div class="w-full max-w-sm bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
+      <div class="text-center mb-6">
+        <div class="mx-auto mb-3 w-14 h-14 rounded-2xl bg-blue-600 flex items-center justify-center text-2xl font-bold">FAT</div>
+        <h1 class="text-2xl font-bold">FAT Mogniy</h1>
+        <p class="text-zinc-400 text-sm mt-1">Твой личный мессенджер · версия v2.4</p>
+      </div>
+      <label for="usernameInput" class="block text-sm text-zinc-300 mb-1">Имя пользователя</label>
+      <input id="usernameInput" autocomplete="username" maxlength="24" placeholder="Например, Saormes"
+        class="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-3 outline-none focus:border-blue-500 mb-4">
+      <label for="emailInput" class="block text-sm text-zinc-300 mb-1">Электронная почта</label>
+      <input id="emailInput" type="email" autocomplete="email" placeholder="you@example.com"
+        class="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-3 outline-none focus:border-blue-500 mb-4">
+      <label for="passwordInput" class="block text-sm text-zinc-300 mb-1">Пароль (минимум 6 символов)</label>
+      <input id="passwordInput" type="password" autocomplete="current-password" minlength="6" placeholder="Не используй пароль от важных аккаунтов"
+        class="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-3 outline-none focus:border-blue-500">
+      <div class="grid grid-cols-2 gap-2 mt-5">
+        <button id="loginButton" class="bg-blue-600 hover:bg-blue-500 rounded-xl py-3 font-semibold">Войти</button>
+        <button id="registerButton" class="bg-zinc-700 hover:bg-zinc-600 rounded-xl py-3 font-semibold">Регистрация</button>
+      </div>
+      <p id="authStatus" role="status" class="text-sm text-zinc-400 mt-3 min-h-5"></p>
+      <button id="diagnosticButton" type="button" class="w-full mt-2 border border-zinc-700 rounded-xl py-2 text-sm text-zinc-300">Проверить подключение</button>
+      <p class="text-xs text-zinc-500 mt-3">Важно: для стабильной авторизации открой сайт с HTTPS-хостинга, а не напрямую из «Загрузок». Используй уникальный пароль, не совпадающий с паролями других аккаунтов.</p>
+    </div>
+  </div>
+
+  <div id="appScreen" class="hidden">
+    <header id="globalHeader" class="flex items-center justify-between px-4 py-3 border-b">
+      <h1 class="font-extrabold tracking-wide text-lg">FAT Mogniy</h1><span id="versionBadge" class="text-sm font-bold px-3 py-1 rounded-lg">V2.2</span>
+    </header>
+    <div id="workspace">
+      <aside id="contactsPane" class="bg-zinc-900 flex flex-col">
+        <header class="p-3 border-b border-zinc-800 flex items-center justify-between gap-2">
+          <div><h1 class="font-bold text-lg">FAT Mogniy</h1><p id="currentUserLabel" class="text-sm text-zinc-400"></p></div>
+          <button id="logoutButton" class="text-sm px-3 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700">Выйти</button>
+        </header>
+        <div class="page-heading-row flex items-center justify-between gap-3 px-4 pt-4 pb-1">
+          <h2 id="chatsHeading" class="text-xl font-bold">Чаты</h2>
+        </div>
+        <div class="p-3 flex gap-2">
+          <input id="searchInput" placeholder="Найти пользователя..." maxlength="24"
+            class="min-w-0 flex-1 bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2 outline-none focus:border-blue-500">
+          <button id="searchButton" class="bg-blue-600 rounded-xl px-4">Найти</button>
+        </div>
+        <p id="searchStatus" class="px-4 text-sm text-zinc-400"></p><div id="searchResult" class="px-3"></div>
+        <div id="contactsList" class="flex-1 overflow-y-auto p-2"><p class="text-sm text-zinc-500 px-3 py-4">Пока нет контактов. Найди пользователя по имени.</p></div>
+      </aside>
+      <main id="chatPane" class="flex flex-col bg-zinc-950">
+        <header class="p-3 border-b flex items-center gap-3"><div id="chatAvatar" class="avatar-dot small hidden">?</div><div class="min-w-0 flex-1"><h2 id="chatTitle" class="font-semibold">Выбери контакт</h2><p id="chatSubtitle" class="text-sm">Сообщения появятся здесь</p></div><button id="backToContacts" type="button" class="hidden rounded-lg px-3 py-2 text-sm font-semibold">← <span id="backContactsLabel">К контактам</span></button></header>
+        <div id="messagesList" class="flex-1 overflow-y-auto p-4 space-y-3"><div class="h-full min-h-40 flex items-center justify-center text-zinc-500 text-center">Найди пользователя или выбери контакт, чтобы начать чат.</div></div>
+        <form id="messageForm" class="p-3 border-t border-zinc-800 flex gap-2">
+          <input id="directImageInput" type="file" accept="image/*" class="hidden">
+          <button id="directImageButton" type="button" disabled aria-label="Отправить фото" title="Отправить фото" class="rounded-xl border border-sky-300 bg-white px-3 text-xl disabled:opacity-50">＋</button>
+          <input id="messageInput" maxlength="2000" placeholder="Напиши сообщение..." disabled class="min-w-0 flex-1 bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-3 outline-none focus:border-blue-500 disabled:opacity-50">
+          <button id="sendButton" disabled class="bg-blue-600 hover:bg-blue-500 rounded-xl px-4 font-semibold disabled:opacity-50">➤</button>
+        </form>
+      </main>
+      <section id="profilePane" class="page-panel hidden p-5">
+        <div class="max-w-xl mx-auto flex flex-col gap-4">
+          <h2 id="profileHeading" class="text-xl font-bold">Профиль</h2>
+          <div class="rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
+            <div class="grid grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)] gap-4 items-start">
+              <div>
+                <p id="avatarColorLabel" class="block text-sm font-semibold mb-3">Цвет аватара</p>
+                <div id="avatarPalette" class="avatar-palette" aria-label="Цвет аватара">
+                  <button type="button" class="avatar-color active" data-color="#60a5fa" style="background:#60a5fa" aria-label="Blue"></button>
+                  <button type="button" class="avatar-color" data-color="#f87171" style="background:#f87171" aria-label="Red"></button>
+                  <button type="button" class="avatar-color" data-color="#4ade80" style="background:#4ade80" aria-label="Green"></button>
+                  <button type="button" class="avatar-color" data-color="#facc15" style="background:#facc15" aria-label="Yellow"></button>
+                  <button type="button" class="avatar-color" data-color="#c084fc" style="background:#c084fc" aria-label="Purple"></button>
+                  <button type="button" class="avatar-color" data-color="#fb923c" style="background:#fb923c" aria-label="Orange"></button>
+                  <button type="button" class="avatar-color" data-color="#2dd4bf" style="background:#2dd4bf" aria-label="Turquoise"></button>
+                  <button type="button" class="avatar-color" data-color="#f9a8d4" style="background:#f9a8d4" aria-label="Pink"></button>
+                </div>
+              </div>
+              <div>
+                <label id="profileNameLabel" for="profileNameInput" class="block text-sm font-semibold mb-2">Имя профиля</label>
+                <input id="profileNameInput" maxlength="24" placeholder="3–24 символа" class="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-3 outline-none focus:border-blue-500">
+              </div>
+            </div>
+            <button id="saveProfileButton" class="w-full mt-4 bg-blue-600 hover:bg-blue-500 rounded-xl py-3 font-semibold">Сохранить</button>
+            <p id="profileStatus" role="status" class="text-sm mt-3"></p>
+          </div>
+          <div class="rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
+            <h3 id="settingsTitle" class="text-lg font-semibold mb-1">Языки</h3>
+            <p id="languageLabel" class="text-sm text-zinc-400 mb-3">Язык приложения</p>
+            <div id="languageButtons" class="grid grid-cols-2 gap-2">
+              <button type="button" class="language-btn rounded-xl border border-zinc-700 bg-zinc-800 px-3 py-3 text-sm" data-lang="en">English</button>
+              <button type="button" class="language-btn rounded-xl border border-zinc-700 bg-zinc-800 px-3 py-3 text-sm" data-lang="ru">Русский</button>
+              <button type="button" class="language-btn rounded-xl border border-zinc-700 bg-zinc-800 px-3 py-3 text-sm" data-lang="az">Azərbaycanca</button>
+              <button type="button" class="language-btn rounded-xl border border-zinc-700 bg-zinc-800 px-3 py-3 text-sm" data-lang="es">Español</button>
+            </div>
+          </div>
+          <div class="rounded-2xl border border-zinc-800 bg-zinc-900 p-4 mt-3">
+            <div class="flex items-center justify-between gap-4">
+              <div class="flex items-center gap-3 min-w-0"><span class="text-2xl" aria-hidden="true">🔔</span><div><h3 id="notificationsTitle" class="font-semibold">Уведомления</h3><p id="notificationsDescription" class="text-sm text-zinc-400">Уведомлять о новых сообщениях</p></div></div>
+              <label class="relative inline-flex items-center cursor-pointer shrink-0"><input id="notificationsToggle" type="checkbox" class="sr-only peer"><span class="w-12 h-7 bg-zinc-600 rounded-full peer-checked:bg-blue-600 after:content-[''] after:absolute after:top-1 after:left-1 after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-transform peer-checked:after:translate-x-5"></span></label>
+            </div>
+            <p id="notificationsStatus" class="text-xs text-zinc-400 mt-3"></p>
+          </div>
+        </div>
+      </section>
+      <section id="groupsPane" class="page-panel hidden flex flex-col min-h-0">
+        <div id="groupsListView" class="flex flex-col flex-1 min-h-0 p-3 gap-3">
+          <div class="flex items-center justify-between gap-3 px-1">
+            <h2 id="groupsHeading" class="text-xl font-bold">Группы</h2>
+            <button id="newGroupButton" type="button" aria-label="Создать группу" class="shrink-0 rounded-xl bg-blue-600 hover:bg-blue-500 px-4 py-2 font-semibold">Создать</button>
+          </div>
+          <div id="groupsList" class="flex flex-col flex-1 min-h-0 overflow-y-auto gap-2 pb-2" aria-label="Список групп"><p id="groupsEmpty" class="text-sm text-zinc-500 py-2">Пока нет групп. Нажми «Создать», чтобы создать.</p></div>
+        </div>
+        <div id="groupChatPane" class="hidden flex-col flex-1 min-h-0 overflow-hidden">
+          <header class="p-3 border-b border-zinc-800 flex items-center gap-3"><div class="min-w-0 flex-1"><h3 id="groupChatTitle" class="font-semibold">Выбери группу</h3><p id="groupChatSubtitle" class="text-sm text-zinc-400">Участники группы</p></div><button id="backToGroups" type="button" class="shrink-0 rounded-lg px-3 py-2 text-sm font-semibold">← <span id="backGroupsLabel">К группам</span></button></header>
+          <div id="groupMessagesList" class="flex-1 min-h-0 overflow-y-auto p-3 space-y-3"><p id="groupMessagesEmpty" class="text-sm text-zinc-500 text-center py-8">Создай группу или выбери существующую.</p></div>
+          <form id="groupMessageForm" class="p-3 border-t border-zinc-800 flex gap-2"><input id="groupImageInput" type="file" accept="image/*" class="hidden"><button id="groupImageButton" type="button" disabled aria-label="Отправить фото" title="Отправить фото" class="rounded-xl border border-sky-300 bg-white px-3 text-xl disabled:opacity-50">＋</button><input id="groupMessageInput" maxlength="2000" placeholder="Сообщение в группу..." disabled class="min-w-0 flex-1 bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-3 outline-none disabled:opacity-50"><button id="groupSendButton" disabled class="bg-blue-600 rounded-xl px-4 font-semibold disabled:opacity-50">➤</button></form>
+        </div>
+      </section>
+      <section id="callsPane" class="page-panel hidden p-5"><h2 id="callsHeading" class="text-xl font-bold">Звонки</h2><p id="callsEmpty" class="mt-3 text-sm">Пока здесь пусто.</p></section>
+    </div>
+    <nav id="bottomNav" class="flex">
+      <button class="nav-btn" data-page="profile"><span class="text-xl">👤</span><span>Профиль</span></button>
+      <button class="nav-btn active" data-page="chats"><span class="text-xl">💬</span><span>Чаты</span></button>
+      <button class="nav-btn" data-page="groups"><span class="text-xl">👥</span><span>Группы</span></button>
+      <button class="nav-btn" data-page="calls"><span class="text-xl">📞</span><span>Звонки</span></button>
+    </nav>
+  </div>
+
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyCeIBjbXnKdLq6oGNr12vCB53oNpXv1LYM",
+  authDomain: "fa-mogniy.firebaseapp.com",
+  databaseURL: "https://fa-mogniy-default-rtdb.firebaseio.com/",
+  projectId: "fa-mogniy",
+  storageBucket: "fa-mogniy.firebasestorage.app",
+  messagingSenderId: "676431734491",
+  appId: "1:676431734491:web:a49fc5748999aabe774efe",
+  measurementId: "G-19F9M7Z005"
+};
+
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.database();
+const messaging = firebase.messaging();
+// Replace this with the Web Push certificate key from Firebase Console → Project settings → Cloud Messaging.
+const FCM_VAPID_KEY = "BHdXgYQY52XcTudt7AiDt-VSCKl0JI3GIl2VDlDQIXR2KHkufO-VpDbAokbMB1VUoZY-djkwyLuZOqO4eBSolZA";
+let messagingReady = false;
+const $ = id => document.getElementById(id);
+const LANG_KEY = "fatMogniyLanguage";
+let currentLanguage = localStorage.getItem(LANG_KEY) || "ru";
+const translations = {
+  en: {
+    tagline:"Your personal messenger · version v2.4", username:"Username", email:"Email address", password:"Password (at least 6 characters)",
+    example:"For example, Saormes", passwordHint:"Don't use a password from important accounts", login:"Log in", register:"Sign up", diagnostic:"Check connection",
+    httpsHint:"For reliable sign-in, open the site from HTTPS hosting, not directly from Downloads. Use a unique password that you don't use for other accounts.",
+    findUser:"Find user...", find:"Search", contacts:"Contacts", noContacts:"No contacts yet. Find a user by name.", chooseContact:"Choose a contact", messagesHere:"Messages will appear here", startChat:"Find a user or choose a contact to start chatting.",
+    writeMessage:"Write a message...", profile:"Profile", chats:"Chats", groups:"Groups", onlyName:"For now, you can only change your username.", newUsername:"New username", saveName:"Save name", help:"Chats are saved by account ID, so changing your name should not delete conversations.", settings:"Languages", appLanguage:"App language", avatarColor:"Avatar color", profileName:"Profile name", saveProfile:"Save", groupsSoon:"This section is under development. Group chats will appear here later.",
+    openChat:"Open chat", searching:"Searching...", wait:"Please wait...", saving:"Saving...", nameRule:"Username must be 3–24 characters: letters, numbers, spaces, _ or -.", sameName:"That's already your name.", taken:"This username is already taken. Try another.", changed:"Username changed! Chats and contacts are saved.", saved:"Name changed, chats saved. The old name may still appear in search because of database rules.", notFound:"User not found.", minSearch:"Enter at least 3 characters.", authWait:"Please wait...", you:"You", user:"User", errContacts:"Contacts error: ", errMessages:"Could not load messages: ", notSent:"Message not sent: ", save:"Save name", checking:"Checking...", notifications:"Notifications", notificationsDescription:"Notify me about new messages", notificationsEnabled:"Notifications are on.", notificationsDisabled:"Notifications are off.", notificationsDenied:"Browser notifications are blocked; in-app alerts can still appear.", notificationPermission:"Allow notifications in your browser when asked."
+  },
+  ru: {
+    tagline:"Твой личный мессенджер · версия v2.4", username:"Имя пользователя", email:"Электронная почта", password:"Пароль (минимум 6 символов)",
+    example:"Например, Saormes", passwordHint:"Не используй пароль от важных аккаунтов", login:"Войти", register:"Регистрация", diagnostic:"Проверить подключение",
+    httpsHint:"Для стабильной авторизации открой сайт с HTTPS-хостинга, а не напрямую из «Загрузок». Используй уникальный пароль, не совпадающий с паролями других аккаунтов.",
+    findUser:"Найти пользователя...", find:"Найти", contacts:"Контакты", noContacts:"Пока нет контактов. Найди пользователя по имени.", chooseContact:"Выбери контакт", messagesHere:"Сообщения появятся здесь", startChat:"Найди пользователя или выбери контакт, чтобы начать чат.",
+    writeMessage:"Напиши сообщение...", profile:"Профиль", chats:"Чаты", groups:"Группы", onlyName:"Пока можно изменить только имя пользователя.", newUsername:"Новое имя пользователя", saveName:"Сохранить имя", help:"Переписки сохраняются по ID аккаунтов, поэтому смена имени не должна удалять чаты.", settings:"Языки", appLanguage:"Язык приложения", avatarColor:"Цвет аватара", profileName:"Имя профиля", saveProfile:"Сохранить", groupsSoon:"Раздел пока в разработке. Здесь позже появятся групповые чаты.",
+    openChat:"Открыть чат", searching:"Ищем...", wait:"Подожди...", saving:"Сохраняем...", nameRule:"Имя должно содержать 3–24 символа: буквы, цифры, пробел, _ или -.", sameName:"Это уже твоё имя.", taken:"Это имя уже занято. Попробуй другое.", changed:"Имя изменено! Чаты и контакты сохранены.", saved:"Имя изменено, чаты сохранены. Старое имя может ещё отображаться в поиске из-за правил базы данных.", notFound:"Пользователь не найден.", minSearch:"Введи минимум 3 символа.", authWait:"Подожди...", you:"Ты", user:"Пользователь", errContacts:"Ошибка контактов: ", errMessages:"Не удалось загрузить сообщения: ", notSent:"Сообщение не отправлено: ", save:"Сохранить имя", checking:"Проверяем...", notifications:"Уведомления", notificationsDescription:"Сообщать о новых сообщениях", notificationsEnabled:"Уведомления включены.", notificationsDisabled:"Уведомления выключены.", notificationsDenied:"Уведомления браузера заблокированы; всплывающие уведомления на сайте могут работать.", notificationPermission:"Разреши уведомления в браузере, когда появится запрос."
+  },
+  az: {
+    tagline:"Sənin şəxsi mesajlaşma tətbiqin · v5", username:"İstifadəçi adı", email:"E-poçt ünvanı", password:"Şifrə (ən azı 6 simvol)",
+    example:"Məsələn, Saormes", passwordHint:"Vacib hesablarının şifrəsini istifadə etmə", login:"Daxil ol", register:"Qeydiyyat", diagnostic:"Bağlantını yoxla",
+    httpsHint:"Sabit giriş üçün saytı Yükləmələrdən deyil, HTTPS hostinqindən aç. Başqa hesablarında istifadə etmədiyin şifrə seç.",
+    findUser:"İstifadəçi axtar...", find:"Axtar", contacts:"Kontaktlar", noContacts:"Hələ kontakt yoxdur. Adla istifadəçi axtar.", chooseContact:"Kontakt seç", messagesHere:"Mesajlar burada görünəcək", startChat:"Söhbətə başlamaq üçün istifadəçi axtar və ya kontakt seç.",
+    writeMessage:"Mesaj yaz...", profile:"Profil", chats:"Söhbətlər", groups:"Qruplar", onlyName:"Hələlik yalnız istifadəçi adını dəyişə bilərsən.", newUsername:"Yeni istifadəçi adı", saveName:"Adı yadda saxla", help:"Söhbətlər hesab ID-si ilə saxlanılır, buna görə adın dəyişməsi yazışmaları silməməlidir.", settings:"Dillər", appLanguage:"Tətbiqin dili", avatarColor:"Avatar rəngi", profileName:"Profil adı", saveProfile:"Yadda saxla", groupsSoon:"Bu bölmə hazırlanır. Qrup söhbətləri daha sonra burada olacaq.",
+    openChat:"Söhbəti aç", searching:"Axtarılır...", wait:"Gözlə...", saving:"Yadda saxlanılır...", nameRule:"Ad 3–24 simvol olmalıdır: hərflər, rəqəmlər, boşluq, _ və ya -.", sameName:"Bu artıq sənin adındır.", taken:"Bu ad artıq istifadə olunur. Başqa ad seç.", changed:"Ad dəyişdirildi! Söhbətlər və kontaktlar saxlanıldı.", saved:"Ad dəyişdirildi, söhbətlər saxlanıldı. Baza qaydalarına görə köhnə ad axtarışda görünə bilər.", notFound:"İstifadəçi tapılmadı.", minSearch:"Ən azı 3 simvol daxil et.", authWait:"Gözlə...", you:"Sən", user:"İstifadəçi", errContacts:"Kontakt xətası: ", errMessages:"Mesajları yükləmək olmadı: ", notSent:"Mesaj göndərilmədi: ", save:"Adı yadda saxla", checking:"Yoxlanılır...", notifications:"Bildirişlər", notificationsDescription:"Yeni mesajlar barədə xəbər ver", notificationsEnabled:"Bildirişlər aktivdir.", notificationsDisabled:"Bildirişlər söndürülüb.", notificationsDenied:"Brauzer bildirişləri bloklanıb; saytdakı bildirişlər yenə görünə bilər.", notificationPermission:"Soruşulanda brauzerdə bildirişlərə icazə ver."
+  },
+  es: {
+    tagline:"Tu mensajero personal · versión v5", username:"Nombre de usuario", email:"Correo electrónico", password:"Contraseña (mínimo 6 caracteres)",
+    example:"Por ejemplo, Saormes", passwordHint:"No uses la contraseña de tus cuentas importantes", login:"Iniciar sesión", register:"Registrarse", diagnostic:"Comprobar conexión",
+    httpsHint:"Para iniciar sesión de forma estable, abre el sitio desde un alojamiento HTTPS, no directamente desde Descargas. Usa una contraseña única.",
+    findUser:"Buscar usuario...", find:"Buscar", contacts:"Contactos", noContacts:"Aún no hay contactos. Busca por nombre.", chooseContact:"Elige un contacto", messagesHere:"Los mensajes aparecerán aquí", startChat:"Busca un usuario o elige un contacto para iniciar un chat.",
+    writeMessage:"Escribe un mensaje...", profile:"Perfil", chats:"Chats", groups:"Grupos", onlyName:"Por ahora solo puedes cambiar tu nombre de usuario.", newUsername:"Nuevo nombre de usuario", saveName:"Guardar nombre", help:"Los chats se guardan por ID de cuenta, así que cambiar el nombre no debería borrar las conversaciones.", settings:"Idiomas", appLanguage:"Idioma de la aplicación", avatarColor:"Color del avatar", profileName:"Nombre del perfil", saveProfile:"Guardar", groupsSoon:"Esta sección está en desarrollo. Los chats grupales llegarán más adelante.",
+    openChat:"Abrir chat", searching:"Buscando...", wait:"Espera...", saving:"Guardando...", nameRule:"El nombre debe tener 3–24 caracteres: letras, números, espacios, _ o -.", sameName:"Ese ya es tu nombre.", taken:"Ese nombre ya está ocupado. Prueba otro.", changed:"¡Nombre cambiado! Los chats y contactos se han conservado.", saved:"Nombre cambiado y chats conservados. El nombre anterior podría seguir apareciendo por las reglas de la base de datos.", notFound:"Usuario no encontrado.", minSearch:"Escribe al menos 3 caracteres.", authWait:"Espera...", you:"Tú", user:"Usuario", errContacts:"Error de contactos: ", errMessages:"No se pudieron cargar los mensajes: ", notSent:"Mensaje no enviado: ", save:"Guardar nombre", checking:"Comprobando...", notifications:"Notificaciones", notificationsDescription:"Avisarme de los mensajes nuevos", notificationsEnabled:"Las notificaciones están activadas.", notificationsDisabled:"Las notificaciones están desactivadas.", notificationsDenied:"El navegador bloquea las notificaciones; los avisos dentro del sitio aún pueden aparecer.", notificationPermission:"Permite las notificaciones del navegador cuando te lo pida."
+  }
+};
+function tr(key){return (translations[currentLanguage]||translations.ru)[key]||translations.ru[key]||key;}
+function applyLanguage(lang){
+  if(!translations[lang])lang="ru";currentLanguage=lang;localStorage.setItem(LANG_KEY,lang);document.documentElement.lang=lang;
+  const set=(id,key)=>{const el=document.getElementById(id);if(el)el.textContent=tr(key);};
+  set("loginButton","login");set("registerButton","register");set("diagnosticButton","diagnostic");set("searchButton","find");
+  set("chatsHeading","chats");set("profileHeading","profile");set("logoutButton",lang==="en"?"Log out":lang==="az"?"Çıxış":lang==="es"?"Cerrar sesión":"Выйти");
+  if(currentUser)$("currentUserLabel").textContent=currentUser.username;
+  const labels=document.querySelectorAll("label"); if(labels[0])labels[0].textContent=tr("username");if(labels[1])labels[1].textContent=tr("email");if(labels[2])labels[2].textContent=tr("password");
+  const authTitle=document.querySelector("#authScreen h1");if(authTitle)authTitle.textContent="FAT Mogniy";
+  const tagline=document.querySelector("#authScreen .text-center p");if(tagline)tagline.textContent=tr("tagline");
+  const inputs={usernameInput:"example",emailInput:"email",passwordInput:"passwordHint",searchInput:"findUser",profileNameInput:"newUsername",messageInput:"writeMessage"};
+  for(const [id,key] of Object.entries(inputs)){const el=document.getElementById(id);if(el)el.placeholder=tr(key);}
+  set("searchStatus", "");
+  const emptyContacts=$("contactsList").querySelector("p");if(emptyContacts)emptyContacts.textContent=tr("noContacts");
+  set("chatTitle", "chooseContact");set("chatSubtitle","messagesHere");
+  const emptyChat=$("messagesList").querySelector("div.h-full");if(emptyChat)emptyChat.textContent=tr("startChat");
+  const pTitle=document.querySelector("#profilePane h2");if(pTitle)pTitle.textContent=tr("profile");
+  const pIntro=document.querySelector("#profilePane .max-w-xl > p");if(pIntro)pIntro.textContent=tr("onlyName");
+  const profileLabel=document.querySelector('label[for="profileNameInput"]');if(profileLabel)profileLabel.textContent=tr("newUsername");
+  set("saveProfileButton","saveProfile");set("profileNameLabel","profileName");set("avatarColorLabel","avatarColor");set("settingsTitle","settings");set("languageLabel","appLanguage");set("notificationsTitle","notifications");set("notificationsDescription","notificationsDescription");if($("notificationsStatus"))$("notificationsStatus").textContent=currentUser?(currentUser.notificationsEnabled?tr("notificationsEnabled"):tr("notificationsDisabled")):"";
+  const groupsTitle=$("groupsHeading");if(groupsTitle)groupsTitle.textContent=tr("groups");
+  const groupWords={en:["Only you and invited members","No groups yet. Tap + to create one.","Choose a group","Group messages will appear here","Create a group or choose an existing one.","Message the group...","Create group","Group name","Choose contacts","Create","Cancel","Select at least one contact.","Group created!","Could not create group: ","You","members"],ru:["Только ты и приглашённые участники","Пока нет групп. Нажми +, чтобы создать.","Выбери группу","Сообщения группы появятся здесь","Создай группу или выбери существующую.","Сообщение в группу...","Создать группу","Название группы","Выбери контакты","Создать","Отмена","Выбери хотя бы один контакт.","Группа создана!","Не удалось создать группу: ","Ты","участников"],az:["Yalnız sən və dəvət olunanlar","Hələ qrup yoxdur. Yaratmaq üçün + düyməsinə bas.","Qrup seç","Qrup mesajları burada görünəcək","Qrup yarat və ya mövcud qrupu seç.","Qrupa mesaj yaz...","Qrup yarat","Qrupun adı","Kontaktları seç","Yarat","Ləğv et","Ən azı bir kontakt seç.","Qrup yaradıldı!","Qrupu yaratmaq olmadı: ","Sən","iştirakçı"],es:["Solo tú y los miembros invitados","Aún no hay grupos. Pulsa + para crear uno.","Elige un grupo","Los mensajes del grupo aparecerán aquí","Crea un grupo o elige uno existente.","Escribe al grupo...","Crear grupo","Nombre del grupo","Elige contactos","Crear","Cancelar","Elige al menos un contacto.","¡Grupo creada!","No se pudo crear el grupo: ","Tú","miembros"]}[lang]||[];
+  const groupIds=["groupsEmpty","groupChatTitle","groupChatSubtitle","groupMessagesEmpty","groupMessageInput"];
+  [1,2,3,4,5].forEach((wordIndex,i)=>{const el=$(groupIds[i]);if(el&&groupWords[wordIndex]){if(i===4)el.placeholder=groupWords[wordIndex];else el.textContent=groupWords[wordIndex];}});
+  const newGroupButton=$("newGroupButton");if(newGroupButton){newGroupButton.title=groupWords[6]||"Create group";newGroupButton.textContent=({en:"Create",ru:"Создать",az:"Yarat",es:"Crear"})[lang];}
+  const backGroupsLabel=$("backGroupsLabel");if(backGroupsLabel)backGroupsLabel.textContent=({en:"Groups",ru:"К группам",az:"Qruplara",es:"Grupos"})[lang];
+  document.querySelectorAll(".nav-btn").forEach(b=>{const key=b.dataset.page;b.lastElementChild.textContent=key==="calls"?({en:"Calls",ru:"Звонки",az:"Zənglər",es:"Llamadas"})[lang]:tr(key);});
+  const backLabel=$("backContactsLabel");if(backLabel)backLabel.textContent=({en:"Contacts",ru:"К контактам",az:"Kontaktlar",es:"Contactos"})[lang];
+  const callsHeading=$("callsHeading"),callsEmpty=$("callsEmpty");if(callsHeading)callsHeading.textContent=({en:"Calls",ru:"Звонки",az:"Zənglər",es:"Llamadas"})[lang];if(callsEmpty)callsEmpty.textContent=({en:"Nothing here yet.",ru:"Пока здесь пусто.",az:"Hələlik boşdur.",es:"Todavía está vacío."})[lang];
+  const countWords={en:"members",ru:"участников",az:"iştirakçı",es:"miembros"};
+  if(activeGroupData&&$("groupChatSubtitle"))$("groupChatSubtitle").textContent=Object.keys(activeGroupData.members||{}).length+" "+countWords[lang];
+  if(selectedUser){$("chatAvatar").classList.remove("hidden");$("chatAvatar").textContent=avatarInitial(selectedUser.username);$("chatAvatar").style.backgroundColor=avatarColors.includes(selectedUser.avatarColor)?selectedUser.avatarColor:"#60a5fa";$("chatTitle").textContent=selectedUser.username;$("chatSubtitle").textContent=({en:"Chat with ",ru:"Переписка с ",az:"Söhbət: ",es:"Chat con "})[lang]+selectedUser.username;}
+  document.querySelectorAll(".language-btn").forEach(b=>b.classList.toggle("active",b.dataset.lang===lang));
+  const hint=document.querySelector("#authScreen .text-xs");if(hint)hint.textContent=tr("httpsHint");
+}
+
+let currentUser = null, selectedUser = null, contactsRef = null, contactsListener = null, messagesRef = null, messagesListener = null;
+let profileSetupInProgress = false;
+let notificationToastTimer=null;
+let notificationChatRefs=new Map();
+let notificationGroupRefs=new Map();
+let userGroupsRef=null,userGroupsListener=null,activeGroupId=null,activeGroupData=null,groupMessagesRef=null,groupMessagesListener=null;
+const groupNames={en:{create:"Create group",name:"Group name",contacts:"Choose contacts",make:"Create",cancel:"Cancel",none:"Select at least one contact.",created:"Group created!",err:"Could not create group: ",you:"You"},ru:{create:"Создать группу",name:"Название группы",contacts:"Выбери контакты",make:"Создать",cancel:"Отмена",none:"Выбери хотя бы один контакт.",created:"Группа создана!",err:"Не удалось создать группу: ",you:"Ты"},az:{create:"Qrup yarat",name:"Qrupun adı",contacts:"Kontaktları seç",make:"Yarat",cancel:"Ləğv et",none:"Ən azı bir kontakt seç.",created:"Qrup yaradıldı!",err:"Qrupu yaratmaq olmadı: ",you:"Sən"},es:{create:"Crear grupo",name:"Nombre del grupo",contacts:"Elige contactos",make:"Crear",cancel:"Cancelar",none:"Elige al menos un contacto.",created:"¡Grupo creado!",err:"No se pudo crear el grupo: ",you:"Tú"}};
+
+function status(id, text, error=false) {
+  $(id).textContent = text;
+  $(id).className = "text-sm mt-3 min-h-5 " + (error ? "text-red-400" : "text-zinc-400");
+}
+function cleanName(s){return s.trim().replace(/\s+/g," ");}
+function nameKey(s){return cleanName(s).toLowerCase();}
+function safeKey(s){return nameKey(s).replace(/[.#$\[\]\/]/g,"_");}
+function chatPath(a,b){return [a,b].sort();}
+function detachContacts(){if(contactsRef&&contactsListener)contactsRef.off("value",contactsListener);contactsRef=null;contactsListener=null;}
+function detachMessages(){if(messagesRef&&messagesListener)messagesRef.off("value",messagesListener);messagesRef=null;messagesListener=null;}
+function clearNotificationListeners(map){for(const entry of map.values()){try{entry.ref.off("value",entry.listener);}catch(_){}}map.clear();}
+function isViewingDirectChat(uid){return !!(currentUser && activePage==="chats" && selectedUser && selectedUser.id===uid && !$("chatPane").classList.contains("hidden"));}
+function isViewingGroupChat(groupId){return !!(currentUser && activePage==="groups" && activeGroupId===groupId && !$("groupChatPane").classList.contains("hidden"));}
+function showMessageNotification(senderName,message,avatarColor="#60a5fa",groupName=""){
+  if(!currentUser||!currentUser.notificationsEnabled)return;
+  const text=String(message||"");const preview=text.length>100?text.slice(0,100).trimEnd()+"…":text;
+  const title=groupName?`${senderName} · ${groupName}`:senderName;
+  const avatar=$("toastAvatar");avatar.textContent=avatarInitial(senderName||"?");avatar.style.backgroundColor=avatarColors.includes(avatarColor)?avatarColor:"#60a5fa";
+  $("toastName").textContent=title;$("toastMessage").textContent=preview;
+  const toast=$("notificationToast");toast.classList.add("show");if(notificationToastTimer)clearTimeout(notificationToastTimer);notificationToastTimer=setTimeout(()=>toast.classList.remove("show"),3000);
+  if("Notification" in window&&Notification.permission==="granted"){
+    try{const n=new Notification(title,{body:preview,icon:""});n.onclick=()=>{window.focus();n.close();};}catch(e){console.warn("Browser notification could not be shown",e);}
+  }
+}
+async function watchNewMessages(path,map,key,kind,chatInfo){
+  if(map.has(key))return;
+  const ref=db.ref(path).limitToLast(200);let known=new Set();
+  try{const initial=await ref.once("value");initial.forEach(child=>known.add(child.key));}catch(e){console.warn("Could not initialize notification listener",e);return;}
+  const listener=ref.on("value",snap=>{
+    snap.forEach(child=>{
+      if(known.has(child.key))return;
+      known.add(child.key);const m=child.val()||{};
+      if(m.sender===currentUser?.id||!m.text)return;
+      // Do not show an alert when the matching conversation is already open.
+      if(kind==="group"){
+        if(isViewingGroupChat(key))return;
+        showMessageNotification(m.senderName||tr("user"),m.text,"#60a5fa",chatInfo.title||"");
+      } else {
+        if(isViewingDirectChat(key))return;
+        showMessageNotification(chatInfo.title||tr("user"),m.text,chatInfo.color||"#60a5fa");
+      }
+    });
+    if(known.size>500){const keys=[];snap.forEach(child=>keys.push(child.key));known=new Set(keys.slice(-200));}
+  },e=>console.warn("Notification listener error",e));
+  map.set(key,{ref,listener});
+}
+async function registerPushToken(){
+  if(!currentUser || !currentUser.notificationsEnabled) return false;
+  if(!('serviceWorker' in navigator) || !('Notification' in window) || !messaging) throw new Error('Этот браузер не поддерживает push-уведомления.');
+  if(!FCM_VAPID_KEY || FCM_VAPID_KEY === 'PASTE_PUBLIC_VAPID_KEY_HERE') throw new Error('Нужно добавить Web Push key из Firebase Console в FCM_VAPID_KEY.');
+  const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+  const token = await messaging.getToken({vapidKey:FCM_VAPID_KEY, serviceWorkerRegistration:registration});
+  if(!token) throw new Error('Firebase не выдал push-токен. Проверь настройки Cloud Messaging.');
+  const tokenKey = token.replace(/[.#$\[\]\/]/g,'_');
+  await db.ref('users/'+currentUser.id+'/fcmTokens/'+tokenKey).set(token);
+  messagingReady = true;
+  return true;
+}
+async function requestNotificationPermission(){
+  if(!currentUser)return;
+  if(!currentUser.notificationsEnabled){$('notificationsStatus').textContent=tr('notificationsDisabled');return;}
+  if(!('Notification' in window)){$('notificationsStatus').textContent=tr('notificationsDenied');return;}
+  if(Notification.permission==='default'){
+    try{await Notification.requestPermission();}catch(_){ }
+  }
+  if(Notification.permission!=='granted'){
+    $('notificationsStatus').textContent=tr('notificationsDenied');return;
+  }
+  try{
+    await registerPushToken();
+    $('notificationsStatus').textContent='Push-уведомления включены на этом устройстве.';
+  }catch(e){
+    console.warn('Push setup incomplete:',e);
+    $('notificationsStatus').textContent='Разрешение выдано, но push ещё не настроен: '+e.message;
+  }
+}
+if(messaging){
+  messaging.onMessage(payload=>{
+    const d=payload.data||{};
+    if(currentUser&&currentUser.notificationsEnabled&&d.body){
+      // Suppress foreground push duplicates while the corresponding conversation is open.
+      const directTarget=selectedUser&&chatPath(currentUser.id,selectedUser.id).join('_');
+      if(d.type==='chat' && activePage==='chats' && directTarget===d.targetId && !$('chatPane').classList.contains('hidden')) return;
+      if(d.type==='group' && isViewingGroupChat(d.targetId)) return;
+      showMessageNotification(d.senderName||d.title||tr('user'),d.body,'#60a5fa',d.groupName||'');
+    }
+  });
+}
+
+function withTimeout(promise, ms, message) {
+  let timer;
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(message)), ms); })
+  ]).finally(() => clearTimeout(timer));
+}
+function errorText(e){
+  if (e && e.code === "auth/unauthorized-domain") return "Firebase отклонил адрес, с которого открыт файл (auth/unauthorized-domain). Нужно открыть сайт с разрешённого веб-адреса, а не из Загрузок.";
+  if (e && e.code === "auth/operation-not-allowed") return "В Firebase не включён вход по Email/Password.";
+  if (e && e.code === "auth/invalid-api-key") return "Firebase отклонил API-ключ. Проверь конфигурацию проекта.";
+  if (e && e.code === "auth/network-request-failed") return "Браузер не смог связаться с Firebase Authentication. Проверь интернет, VPN/блокировщики и попробуй Chrome.";
+  if (e && e.message && e.message.includes("TIMEOUT_AUTH:")) return "Вход в Firebase Authentication не ответил за 15 секунд. Проверь интернет и адрес открытия файла. Не создавай новый аккаунт.";
+  if (e && e.message && e.message.includes("TIMEOUT_DB:")) return "Firebase принял почту и пароль, но не ответила база данных. Проверь Realtime Database Rules.";
+  if (e && e.message && e.message.includes("TIMEOUT:")) return e.message.replace("TIMEOUT:", "").trim();
+  const map={
+    "auth/email-already-in-use":"Эта почта уже зарегистрирована.",
+    "auth/invalid-email":"Проверь формат электронной почты.",
+    "auth/weak-password":"Пароль слишком простой: используй минимум 6 символов.",
+    "auth/user-not-found":"Аккаунт с такой почтой не найден.",
+    "auth/wrong-password":"Неверная почта или пароль.",
+    "auth/invalid-credential":"Неверная почта или пароль.",
+    "auth/too-many-requests":"Слишком много попыток. Попробуй позже.",
+    "auth/network-request-failed":"Нет соединения. Проверь интернет."
+  };
+  if(e && (e.code === "PERMISSION_DENIED" || (e.message||"").toLowerCase().includes("permission_denied"))) return "Firebase запретил доступ к базе (PERMISSION_DENIED). Проверь опубликованные Rules Realtime Database.";
+  return map[e.code] || e.message || "Произошла ошибка.";
+}
+async function register(){
+  const username=cleanName($("usernameInput").value), email=$("emailInput").value.trim(), password=$("passwordInput").value;
+  if(!/^[\p{L}\p{N}_ -]{3,24}$/u.test(username)){status("authStatus","Имя: 3–24 символа, буквы/цифры/пробел/_/-.",true);return;}
+  if(!email){status("authStatus","Введи электронную почту.",true);return;}
+  if(password.length<6){status("authStatus","Пароль должен содержать минимум 6 символов.",true);return;}
+  lockAuth(true,"Создаём аккаунт...");
+  profileSetupInProgress=true;
+  let cred=null;
+  try{
+    cred=await withTimeout(auth.createUserWithEmailAndPassword(email,password),15000,"TIMEOUT: запрос к Firebase Authentication не завершился за 15 секунд. Это может быть интернет или способ открытия HTML-файла; повторная регистрация не нужна.");
+    await saveProfileForUser(cred.user, username);
+    const snap=await withTimeout(db.ref("users/"+cred.user.uid).get(),12000,"TIMEOUT: профиль сохранился, но база не ответила при проверке.");
+    if(!snap.exists())throw new Error("Аккаунт создан, но профиль не найден после сохранения. Проверь правила Realtime Database.");
+    openApp(snap.val());
+  }catch(e){
+    const msg=errorText(e);
+    if(cred && cred.user){
+      status("authStatus","Аккаунт уже создан, но профиль не удалось сохранить. НЕ регистрируйся заново. Попробуй «Войти» с этой почтой и паролем. Причина: "+msg,true);
+    } else {
+      status("authStatus",msg + (e && e.code ? " ["+e.code+"]" : ""),true);
+    }
+  }finally{profileSetupInProgress=false;lockAuth(false);}
+}
+async function saveProfileForUser(user, username){
+  const clean=cleanName(username);
+  if(!/^[\p{L}\p{N}_ -]{3,24}$/u.test(clean))throw new Error("Для восстановления профиля введи имя пользователя длиной 3–24 символа.");
+  const key=safeKey(clean);
+  const taken=await withTimeout(db.ref("usernameIndex/"+key).get(),10000,"TIMEOUT: чтение usernameIndex не завершилось за 10 секунд. Проверь правила и подключение Realtime Database.");
+  if(taken.exists() && taken.val()!==user.uid)throw new Error("Это имя пользователя уже занято. Введи другое имя и попробуй снова.");
+  const updates={};
+  updates["users/"+user.uid]={username:clean,usernameLower:key,createdAt:firebase.database.ServerValue.TIMESTAMP};
+  updates["usernameIndex/"+key]=user.uid;
+  await withTimeout(db.ref().update(updates),10000,"TIMEOUT: запись профиля/usernameIndex не завершилась за 10 секунд. Проверь правила Realtime Database.");
+}
+async function login(){
+  const email=$("emailInput").value.trim(), password=$("passwordInput").value;
+  if(!email||!password){status("authStatus","Введи почту и пароль.",true);return;}
+  lockAuth(true,"Входим...");
+  profileSetupInProgress=true;
+  try{
+    status("authStatus","Шаг 1/2: проверяем почту и пароль в Firebase Authentication...");
+    const result=await withTimeout(auth.signInWithEmailAndPassword(email,password),15000,"TIMEOUT_AUTH: Firebase Authentication не завершил вход за 15 секунд. Проверка HTTP 200 проверяет только доступность API, но не подтверждает успешный вход. Если файл открыт из «Загрузок» (content:// или file://), размести его на HTTPS-хостинге и добавь домен в Firebase Authentication → Settings → Authorized domains. Не регистрируй почту заново.");
+    const user=result.user;
+    status("authStatus","Шаг 2/2: вход принят. Загружаем профиль из Realtime Database...");
+    let snap=await withTimeout(db.ref("users/"+user.uid).get(),10000,"TIMEOUT_DB: вход принят, но Realtime Database не ответила при чтении users/UID за 10 секунд.");
+    if(!snap.exists()){
+      const username=cleanName($("usernameInput").value);
+      if(!username){status("authStatus","Почта и пароль верны, но профиль не был создан. Введи имя пользователя в верхнее поле и нажми «Войти» ещё раз, чтобы восстановить профиль.",true);return;}
+      await saveProfileForUser(user,username);
+      snap=await withTimeout(db.ref("users/"+user.uid).get(),10000,"TIMEOUT: профиль создан, но база не ответила при повторном чтении.");
+    }
+    if(!snap.exists())throw new Error("Профиль не найден даже после восстановления.");
+    openApp(snap.val());
+  }catch(e){status("authStatus",errorText(e) + (e && e.code ? " ["+e.code+"]" : ""),true);}
+  finally{profileSetupInProgress=false;lockAuth(false);}
+}
+
+function lockAuth(locked,label){
+  $("loginButton").disabled=locked;$("registerButton").disabled=locked;
+  $("loginButton").textContent=locked?"Подожди...":"Войти";
+  $("registerButton").textContent=locked?"Подожди...":"Регистрация";
+  if(locked)status("authStatus",label);
+}
+let selectedAvatarColor="#60a5fa";
+const avatarColors=["#60a5fa","#f87171","#4ade80","#facc15","#c084fc","#fb923c","#2dd4bf","#f9a8d4"];
+function avatarInitial(name){return (String(name||"?").trim()[0]||"?").toUpperCase();}
+function makeAvatar(name,color,small=true){const el=document.createElement("span");el.className="avatar-dot"+(small?" small":"");el.style.backgroundColor=avatarColors.includes(color)?color:"#60a5fa";el.textContent=avatarInitial(name);el.setAttribute("aria-hidden","true");return el;}
+function refreshAvatarPalette(){document.querySelectorAll(".avatar-color").forEach(b=>b.classList.toggle("active",b.dataset.color===selectedAvatarColor));}
+document.querySelectorAll(".avatar-color").forEach(b=>b.addEventListener("click",()=>{selectedAvatarColor=b.dataset.color;refreshAvatarPalette();}));
+let activePage="chats";
+function setPage(page){
+  activePage=page;
+  const chats=page==="chats";
+  $("contactsPane").classList.toggle("hidden",!chats || !!selectedUser);
+  $("chatPane").classList.toggle("hidden",!chats || !selectedUser);
+  $("profilePane").classList.toggle("hidden",page!=="profile");
+  $("groupsPane").classList.toggle("hidden",page!=="groups");
+  $("callsPane").classList.toggle("hidden",page!=="calls");
+  $("workspace").style.display="flex";
+  document.querySelectorAll(".nav-btn").forEach(b=>b.classList.toggle("active",b.dataset.page===page));
+  if(page!=="chats"){$("contactsPane").classList.add("hidden");$("chatPane").classList.add("hidden");}
+}
+
+function openApp(profile){
+  currentUser={id:auth.currentUser.uid,username:profile.username,usernameLower:profile.usernameLower||nameKey(profile.username||""),createdAt:profile.createdAt||firebase.database.ServerValue.TIMESTAMP,avatarColor:avatarColors.includes(profile.avatarColor)?profile.avatarColor:"#60a5fa",notificationsEnabled:profile.notificationsEnabled===true};
+  selectedAvatarColor=currentUser.avatarColor;refreshAvatarPalette();
+  $("authScreen").classList.add("hidden");$("appScreen").classList.remove("hidden");
+  $("currentUserLabel").textContent=profile.username;
+  $("profileNameInput").value=profile.username||"";
+  $("notificationsToggle").checked=currentUser.notificationsEnabled;
+  $("notificationsStatus").textContent=currentUser.notificationsEnabled?tr("notificationsEnabled"):tr("notificationsDisabled");
+  setPage("chats");
+  loadContacts();
+  loadUserGroups();
+  if(currentUser.notificationsEnabled && "Notification" in window && Notification.permission==="granted") registerPushToken().catch(e=>console.warn("Push registration pending:",e));
+}
+
+async function changeUsername(){
+  if(!currentUser)return;
+  const newName=cleanName($("profileNameInput").value), oldName=currentUser.username;
+  if(!/^[\p{L}\p{N}_ -]{3,24}$/u.test(newName)){
+    $("profileStatus").textContent=tr("nameRule");
+    $("profileStatus").className="text-sm mt-3 text-red-400";return;
+  }
+  const oldKey=safeKey(oldName), newKey=safeKey(newName);
+  const colorChanged=selectedAvatarColor!==(currentUser.avatarColor||"#60a5fa");
+  if(newKey===oldKey && newName===oldName && !colorChanged){
+    $("profileStatus").textContent=tr("sameName");
+    $("profileStatus").className="text-sm mt-3 text-zinc-400";return;
+  }
+  const button=$("saveProfileButton");button.disabled=true;button.textContent=tr("saving");
+  try{
+    const indexSnap=await db.ref("usernameIndex/"+newKey).get();
+    if(indexSnap.exists() && indexSnap.val()!==currentUser.id)throw new Error(tr("taken"));
+    const profileSnap=await db.ref("users/"+currentUser.id).get(), oldProfile=profileSnap.val()||{};
+    const updates={};
+    updates["users/"+currentUser.id]={...oldProfile,username:newName,usernameLower:nameKey(newName),avatarColor:selectedAvatarColor,createdAt:oldProfile.createdAt||firebase.database.ServerValue.TIMESTAMP};
+    updates["usernameIndex/"+newKey]=currentUser.id;
+    await db.ref().update(updates);
+    currentUser.username=newName;currentUser.usernameLower=nameKey(newName);currentUser.avatarColor=selectedAvatarColor;
+    $("currentUserLabel").textContent=newName;$("profileNameInput").value=newName;
+    $("profileStatus").textContent=colorChanged&&newName===oldName?({en:"Avatar color saved!",ru:"Цвет аватара сохранён!",az:"Avatar rəngi yadda saxlanıldı!",es:"¡Color del avatar guardado!"})[currentLanguage]:tr("changed");
+    $("profileStatus").className="text-sm mt-3 text-green-400";
+    loadContacts();
+    if(oldKey!==newKey){
+      try{await db.ref("usernameIndex/"+oldKey).remove();}
+      catch(_){$("profileStatus").textContent=tr("saved");}
+    }
+  }catch(e){
+    $("profileStatus").textContent=e.message||errorText(e);
+    $("profileStatus").className="text-sm mt-3 text-red-400";
+  }finally{button.disabled=false;button.textContent=tr("saveProfile");}
+}
+
+function detachGroupMessages(){if(groupMessagesRef&&groupMessagesListener)groupMessagesRef.off("value",groupMessagesListener);groupMessagesRef=null;groupMessagesListener=null;}
+function detachUserGroups(){if(userGroupsRef&&userGroupsListener)userGroupsRef.off("value",userGroupsListener);userGroupsRef=null;userGroupsListener=null;}
+function showGroupsList(){
+  $("groupsListView").classList.remove("hidden");
+  $("groupChatPane").classList.add("hidden");
+  $("groupChatPane").classList.remove("flex");
+}
+async function getGroupMemberNames(g){
+  const ids=Object.keys(g.members||{}).filter(uid=>g.members[uid]===true);
+  const names=[];
+  for(const uid of ids){
+    if(uid===currentUser?.id){names.push(currentUser.username||"User");continue;}
+    try{const snap=await db.ref("users/"+uid+"/username").get();if(snap.exists())names.push(String(snap.val()));}
+    catch(e){console.warn("Could not load group member name",e);}
+  }
+  return names;
+}
+function loadUserGroups(){
+  if(!currentUser)return;clearNotificationListeners(notificationGroupRefs);detachUserGroups();userGroupsRef=db.ref("userGroups/"+currentUser.id);
+  userGroupsListener=userGroupsRef.on("value",async snap=>{
+    const list=$("groupsList");list.replaceChildren();const ids=Object.keys(snap.val()||{});
+    if(!ids.length){const p=document.createElement("p");p.className="text-sm text-zinc-500 py-3 px-2";p.textContent=({en:"No groups yet. Tap Create to make one.",ru:"Пока нет групп. Нажми «Создать», чтобы создать.",az:"Hələ qrup yoxdur. Yaratmaq üçün «Yarat» düyməsinə bas.",es:"Aún no hay grupos. Pulsa «Crear» para crear uno."})[currentLanguage];list.appendChild(p);if(activeGroupId)clearActiveGroup();showGroupsList();return;}
+    let activeStillExists=false;
+    for(const id of ids){try{const gs=await db.ref("groups/"+id).get();if(!gs.exists())continue;const g=gs.val();if(!g.members||g.members[currentUser.id]!==true){await db.ref("userGroups/"+currentUser.id+"/"+id).remove().catch(()=>{});continue;}
+      watchNewMessages("groupChats/"+id+"/messages",notificationGroupRefs,id,"group",{title:g.name||"Group"});
+      const card=document.createElement("div");card.className="w-full flex items-stretch gap-2";
+      const b=document.createElement("button");b.type="button";b.className="contact-item w-full min-w-0 text-left px-4 py-3 rounded-xl border border-zinc-700 bg-zinc-900 hover:bg-zinc-800 flex flex-col justify-center"+(activeGroupId===id?" active":"");
+      const title=document.createElement("div");title.className="font-semibold truncate";title.textContent=(g.name||"Group")+(g.ownerId===currentUser.id?" 👑":"");
+      const sub=document.createElement("div");sub.className="text-xs text-zinc-500 mt-1";sub.textContent="…";
+      getGroupMemberNames(g).then(names=>{if(sub.isConnected)sub.textContent=names.join(", ")||({en:"No members",ru:"Нет участников",az:"İştirakçı yoxdur",es:"Sin participantes"})[currentLanguage];});
+      b.append(title,sub);b.onclick=()=>openGroup(id,g);card.appendChild(b);
+      const leave=document.createElement("button");leave.type="button";leave.className="shrink-0 rounded-xl border border-red-200 bg-white px-3 text-xs font-semibold text-red-700";leave.textContent=({en:"Leave",ru:"Выйти",az:"Çıx",es:"Salir"})[currentLanguage];leave.setAttribute("aria-label",({en:"Leave group",ru:"Выйти из группы",az:"Qrupdan çıx",es:"Salir del grupo"})[currentLanguage]);leave.onclick=()=>leaveGroup(id,g,leave);card.appendChild(leave);list.appendChild(card);
+      if(activeGroupId===id)activeStillExists=true;
+    }catch(e){console.warn("Group load failed",e);}}
+    if(activeGroupId){if(activeStillExists){const fresh=await db.ref("groups/"+activeGroupId).get();if(fresh.exists())openGroup(activeGroupId,fresh.val());else{clearActiveGroup();showGroupsList();}}else{clearActiveGroup();showGroupsList();}}
+  },e=>{const p=document.createElement("p");p.className="text-sm text-red-400";p.textContent="Ошибка групп: "+errorText(e);$("groupsList").replaceChildren(p);});
+}
+async function leaveGroup(id,g,button){
+ if(!currentUser||!id)return;
+ const words={en:{confirm:"Leave this group? You will no longer see its messages.",working:"Leaving…",done:"You left the group.",error:"Could not leave group: "},ru:{confirm:"Выйти из этой группы? Ты больше не будешь видеть её сообщения.",working:"Выходим…",done:"Ты вышел из группы.",error:"Не удалось выйти из группы: "},az:{confirm:"Bu qrupdan çıxmaq istəyirsən? Artıq mesajları görə bilməyəcəksən.",working:"Çıxılır…",done:"Qrupdan çıxdın.",error:"Qrupdan çıxmaq olmadı: "},es:{confirm:"¿Salir de este grupo? Ya no verás sus mensajes.",working:"Saliendo…",done:"Has salido del grupo.",error:"No se pudo salir del grupo: "}}[currentLanguage]||{confirm:"Выйти из этой группы?",working:"Выходим…",done:"Ты вышел из группы.",error:"Не удалось выйти: "};
+ if(!confirm(words.confirm))return;button.disabled=true;button.textContent=words.working;
+ try{
+   await db.ref("groups/"+id+"/members/"+currentUser.id).remove();
+   await db.ref("userGroups/"+currentUser.id+"/"+id).remove();
+   if(activeGroupId===id)clearActiveGroup();
+   loadUserGroups();
+   const status=$("searchStatus");if(status)status.textContent=words.done;
+ }catch(e){button.disabled=false;button.textContent=({en:"Leave group",ru:"Выйти из группы",az:"Qrupdan çıx",es:"Salir del grupo"})[currentLanguage];alert(words.error+errorText(e));}
+}
+function clearActiveGroup(){activeGroupId=null;activeGroupData=null;detachGroupMessages();$("groupChatTitle").textContent=({en:"Choose a group",ru:"Выбери группу",az:"Qrup seç",es:"Elige un grupo"})[currentLanguage];$("groupChatSubtitle").textContent="";$("groupMessagesList").innerHTML="";const p=document.createElement("p");p.className="text-sm text-zinc-500 text-center py-8";p.textContent=({en:"Create a group or choose an existing one.",ru:"Создай группу или выбери существующую.",az:"Qrup yarat və ya mövcud qrupu seç.",es:"Crea un grupo o elige uno existente."})[currentLanguage];$("groupMessagesList").appendChild(p);$("groupMessageInput").disabled=true;$("groupSendButton").disabled=true;}
+function openGroup(id,g){activePage="groups";activeGroupId=id;activeGroupData=g;$("groupsListView").classList.add("hidden");$("groupChatPane").classList.remove("hidden");$("groupChatPane").classList.add("flex");detachGroupMessages();$("groupChatTitle").textContent=g.name||"Group";$("groupChatSubtitle").textContent="…";getGroupMemberNames(g).then(names=>{if(activeGroupId===id)$("groupChatSubtitle").textContent=names.join(", ")||({en:"No members",ru:"Нет участников",az:"İştirakçı yoxdur",es:"Sin participantes"})[currentLanguage];});$("groupMessageInput").disabled=false;$("groupSendButton").disabled=false;$("groupImageButton").disabled=false;$("groupsList").querySelectorAll("button.contact-item").forEach(b=>b.classList.toggle("active",b.firstElementChild&&b.firstElementChild.textContent===(g.name||"Group")+(g.ownerId===currentUser.id?" 👑":"")));const ref=db.ref("groupChats/"+id+"/messages");groupMessagesRef=ref;groupMessagesListener=ref.limitToLast(200).on("value",snap=>{const list=$("groupMessagesList");list.replaceChildren();if(!snap.exists()){const p=document.createElement("p");p.className="text-sm text-zinc-500 text-center py-8";p.textContent=({en:"No messages yet.",ru:"Пока нет сообщений.",az:"Hələ mesaj yoxdur.",es:"Aún no hay mensajes."})[currentLanguage];list.appendChild(p);return;}snap.forEach(child=>{const m=child.val()||{},item=document.createElement("div");item.className="message p-3 rounded-2xl "+(m.sender===currentUser.id?"mine":"theirs");const body=document.createElement("div");if(m.image){const img=document.createElement("img");img.src=m.image;img.alt="Фото";img.loading="lazy";img.className="max-w-full rounded-xl max-h-72 object-contain";body.appendChild(img);}if(m.text){const caption=document.createElement("div");caption.textContent=m.text;body.appendChild(caption);}const meta=document.createElement("div");meta.className="text-xs opacity-70 mt-1";meta.textContent=(m.sender===currentUser.id?groupNames[currentLanguage].you:(m.senderName||"User"));item.append(body,meta);list.appendChild(item);});list.scrollTop=list.scrollHeight;},e=>{const p=document.createElement("p");p.className="text-sm text-red-400";p.textContent="Не удалось загрузить сообщения: "+errorText(e);$("groupMessagesList").appendChild(p);});}
+$("backToGroups").addEventListener("click",()=>{detachGroupMessages();showGroupsList();});
+let createGroupOpening=false;
+async function showCreateGroup(){
+ if(!currentUser||createGroupOpening)return;createGroupOpening=true;const t=groupNames[currentLanguage]||groupNames.ru;
+ try{const snap=await db.ref("contacts/"+currentUser.id).get();const contacts=snap.val()||{};const names=[];for(const uid of Object.keys(contacts)){const ps=await db.ref("users/"+uid).get();if(ps.exists())names.push({id:uid,name:ps.val().username||"User"});}
+ const modal=document.createElement("div");modal.className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4";modal.innerHTML=`<div class="w-full max-w-md max-h-[85dvh] overflow-y-auto rounded-2xl border border-zinc-700 bg-zinc-900 p-5"><h3 class="text-xl font-bold mb-4" id="createGroupTitle"></h3><label class="block text-sm text-zinc-300 mb-2" for="createGroupName"></label><input id="createGroupName" maxlength="40" class="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-3 mb-4" placeholder=""><p id="createGroupContactsLabel" class="text-sm text-zinc-300 mb-2"></p><div id="createGroupContacts" class="space-y-2 mb-4"></div><p id="createGroupStatus" class="text-sm text-red-400 mb-3"></p><div class="flex gap-2"><button id="createGroupCancel" class="flex-1 rounded-xl bg-zinc-700 py-3"></button><button id="createGroupSubmit" class="flex-1 rounded-xl bg-blue-600 py-3 font-semibold"></button></div></div>`;document.body.appendChild(modal);
+ modal.querySelector("#createGroupTitle").textContent=t.create;modal.querySelector('label[for="createGroupName"]').textContent=t.name;modal.querySelector("#createGroupName").placeholder=t.name;modal.querySelector("#createGroupContactsLabel").textContent=t.contacts;modal.querySelector("#createGroupCancel").textContent=t.cancel;modal.querySelector("#createGroupSubmit").textContent=t.make;
+ const area=modal.querySelector("#createGroupContacts");if(!names.length){const p=document.createElement("p");p.className="text-sm text-zinc-500";p.textContent=({en:"Add people to your contacts first.",ru:"Сначала добавь людей в контакты.",az:"Əvvəlcə insanları kontaktlarına əlavə et.",es:"Primero añade personas a tus contactos."})[currentLanguage];area.appendChild(p);}for(const c of names){const label=document.createElement("label");label.className="flex items-center gap-3 rounded-xl bg-zinc-800 p-3";const cb=document.createElement("input");cb.type="checkbox";cb.value=c.id;cb.className="w-4 h-4";const span=document.createElement("span");span.textContent=c.name;label.append(cb,span);area.appendChild(label);}
+ modal.querySelector("#createGroupCancel").onclick=()=>{createGroupOpening=false;modal.remove();};modal.addEventListener("click",e=>{if(e.target===modal){createGroupOpening=false;modal.remove();}});modal.querySelector("#createGroupSubmit").onclick=async()=>{const name=cleanName(modal.querySelector("#createGroupName").value);const chosen=[...area.querySelectorAll("input:checked")].map(x=>x.value);const err=modal.querySelector("#createGroupStatus");if(name.length<2){err.textContent=({en:"Enter a group name (at least 2 characters).",ru:"Введи название группы (минимум 2 символа).",az:"Qrup adını yaz (ən azı 2 simvol).",es:"Escribe un nombre de grupo (mínimo 2 caracteres)."})[currentLanguage];return;}if(!chosen.length){err.textContent=t.none;return;}const submit=modal.querySelector("#createGroupSubmit");submit.disabled=true;try{const groupRef=db.ref("groups").push();const gid=groupRef.key;const members={[currentUser.id]:true};chosen.forEach(uid=>members[uid]=true);await groupRef.set({name,ownerId:currentUser.id,members,createdAt:firebase.database.ServerValue.TIMESTAMP});const membershipUpdates={};Object.keys(members).forEach(uid=>membershipUpdates["userGroups/"+uid+"/"+gid]=true);try{await db.ref().update(membershipUpdates);}catch(membershipError){try{await groupRef.remove();}catch(cleanupError){console.warn("Could not clean up incomplete group",cleanupError);}throw membershipError;}createGroupOpening=false;modal.remove();loadUserGroups();const g={name,ownerId:currentUser.id,members};openGroup(gid,g);}catch(e){err.textContent=t.err+errorText(e);submit.disabled=false;createGroupOpening=false;}};
+ }catch(e){createGroupOpening=false;alert((groupNames[currentLanguage]||groupNames.ru).err+errorText(e));}
+}
+// Compress images before saving them in the message node, so no Firebase Storage setup is required.
+async function imageFileToDataUrl(file){
+  if(!file || !file.type.startsWith("image/")) throw new Error("Выбери файл изображения.");
+  if(file.size>12*1024*1024) throw new Error("Фото слишком большое (максимум 12 МБ до сжатия).");
+  const source=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(new Error("Не удалось прочитать фото."));reader.readAsDataURL(file);});
+  const image=await new Promise((resolve,reject)=>{const img=new Image();img.onload=()=>resolve(img);img.onerror=()=>reject(new Error("Этот формат изображения не поддерживается."));img.src=source;});
+  const scale=Math.min(1,1000/Math.max(image.width,image.height));const canvas=document.createElement("canvas");canvas.width=Math.max(1,Math.round(image.width*scale));canvas.height=Math.max(1,Math.round(image.height*scale));
+  const ctx=canvas.getContext("2d");ctx.drawImage(image,0,0,canvas.width,canvas.height);
+  let quality=.78,data=canvas.toDataURL("image/jpeg",quality);
+  while(data.length>380000 && quality>.38){quality-=.1;data=canvas.toDataURL("image/jpeg",quality);}
+  if(data.length>450000)throw new Error("Фото не удалось достаточно сжать. Выбери другое изображение.");
+  return data;
+}
+async function sendImageTo(path,file,caption="",extra={}){
+  const image=await imageFileToDataUrl(file);
+  await db.ref(path).push({...extra,image,text:caption,createdAt:firebase.database.ServerValue.TIMESTAMP});
+}
+$("directImageButton").addEventListener("click",()=>{if(currentUser&&selectedUser)$("directImageInput").click();});
+$("directImageInput").addEventListener("change",async()=>{
+  const file=$("directImageInput").files?.[0];if(!file)return;if(!currentUser||!selectedUser)return;
+  const button=$("directImageButton");button.disabled=true;button.textContent="…";
+  try{const [a,b]=chatPath(currentUser.id,selectedUser.id);await sendImageTo("chats/"+a+"/"+b+"/messages",file,$("messageInput").value.trim(),{sender:currentUser.id});$("messageInput").value="";}
+  catch(e){status("searchStatus","Фото не отправлено: "+errorText(e),true);}
+  finally{button.textContent="＋";button.disabled=!selectedUser;$("directImageInput").value="";}
+});
+$("groupImageButton").addEventListener("click",()=>{if(currentUser&&activeGroupId)$("groupImageInput").click();});
+$("groupImageInput").addEventListener("change",async()=>{
+  const file=$("groupImageInput").files?.[0];if(!file)return;if(!currentUser||!activeGroupId)return;
+  const button=$("groupImageButton");button.disabled=true;button.textContent="…";
+  try{await sendImageTo("groupChats/"+activeGroupId+"/messages",file,$("groupMessageInput").value.trim(),{sender:currentUser.id,senderName:currentUser.username});$("groupMessageInput").value="";}
+  catch(e){alert("Фото не отправлено: "+errorText(e));}
+  finally{button.textContent="＋";button.disabled=!activeGroupId;$("groupImageInput").value="";}
+});
+
+$("groupMessageForm").addEventListener("submit",async e=>{e.preventDefault();if(!currentUser||!activeGroupId)return;const text=$("groupMessageInput").value.trim();if(!text)return;const b=$("groupSendButton");b.disabled=true;try{await db.ref("groupChats/"+activeGroupId+"/messages").push({sender:currentUser.id,senderName:currentUser.username,text,createdAt:firebase.database.ServerValue.TIMESTAMP});$("groupMessageInput").value="";}catch(err){alert("Не удалось отправить сообщение: "+errorText(err));}finally{b.disabled=false;}});
+$("newGroupButton").addEventListener("click",showCreateGroup);
+
+$("notificationsToggle").addEventListener("change",async()=>{
+  if(!currentUser)return;const enabled=$("notificationsToggle").checked;currentUser.notificationsEnabled=enabled;$("notificationsStatus").textContent=enabled?tr("notificationPermission"):tr("notificationsDisabled");
+  const permissionTask=enabled?requestNotificationPermission():Promise.resolve();
+  try{await db.ref("users/"+currentUser.id+"/notificationsEnabled").set(enabled);await permissionTask;}
+  catch(e){currentUser.notificationsEnabled=!enabled;$("notificationsToggle").checked=!enabled;$("notificationsStatus").textContent=errorText(e);}
+});
+
+function closeApp(){
+  detachContacts();detachMessages();detachUserGroups();detachGroupMessages();clearNotificationListeners(notificationChatRefs);clearNotificationListeners(notificationGroupRefs);selectedUser=null;currentUser=null;
+  $("appScreen").classList.add("hidden");$("authScreen").classList.remove("hidden");
+  $("messagesList").textContent="";$("messageInput").disabled=true;$("sendButton").disabled=true;
+}
+auth.onAuthStateChanged(async user=>{
+  // During registration, Firebase announces the new account before its database profile is saved.
+  if(profileSetupInProgress)return;
+  if(!user){closeApp();return;}
+  try{
+    const snap=await withTimeout(db.ref("users/"+user.uid).get(),12000,"TIMEOUT: не удалось получить профиль из базы за 12 секунд. Проверь правила Realtime Database.");
+    if(!snap.exists()){status("authStatus","Аккаунт есть, но профиль в базе не найден. Нужна повторная регистрация после исправления правил.",true);return;}
+    openApp(snap.val());
+  }catch(e){status("authStatus","Не удалось загрузить профиль: "+errorText(e),true);}
+});
+function loadContacts(){
+  detachContacts();clearNotificationListeners(notificationChatRefs);contactsRef=db.ref("contacts/"+currentUser.id);
+  contactsListener=contactsRef.on("value",async snap=>{
+    const data=snap.val()||{}, list=$("contactsList");list.replaceChildren();
+    const ids=Object.keys(data);
+    if(!ids.length){list.innerHTML='<p class="text-sm text-zinc-500 px-3 py-4">Пока нет контактов. Найди пользователя по имени.</p>';return;}
+    for(const uid of ids){
+      const p=await db.ref("users/"+uid).get();if(!p.exists())continue;
+      const profile=p.val(), b=document.createElement("button");
+      b.className="contact-item w-full text-left p-3 rounded-xl mb-1 flex items-center gap-3"+(selectedUser&&selectedUser.id===uid?" active":"");
+      const avatar=makeAvatar(profile.username||"Пользователь",profile.avatarColor||"#60a5fa");
+      const title=document.createElement("div");title.className="font-medium min-w-0 truncate";title.textContent=profile.username||"Пользователь";
+      b.append(avatar,title);b.addEventListener("click",()=>selectContact(uid,profile.username||"Пользователь",profile.avatarColor||"#60a5fa"));list.appendChild(b);
+      const [a,buid]=chatPath(currentUser.id,uid);watchNewMessages("chats/"+a+"/"+buid+"/messages",notificationChatRefs,uid,"chat",{title:profile.username||"Пользователь",color:profile.avatarColor||"#60a5fa"});
+    }
+  },e=>status("searchStatus","Ошибка контактов: "+errorText(e),true));
+}
+async function searchUser(){
+  const name=cleanName($("searchInput").value);
+  $("searchResult").replaceChildren();status("searchStatus","");
+  if(name.length<3){status("searchStatus",tr("minSearch"));return;}
+  try{
+    const key=safeKey(name), snap=await db.ref("usernameIndex/"+key).get();
+    if(!snap.exists()){status("searchStatus",tr("notFound"));return;}
+    const uid=snap.val();
+    if(uid===currentUser.id){status("searchStatus","Это твоё имя пользователя.");return;}
+    const p=await db.ref("users/"+uid).get();if(!p.exists()){status("searchStatus","Профиль не найден.");return;}
+    const button=document.createElement("button");button.className="w-full text-left p-3 rounded-xl bg-zinc-800 hover:bg-zinc-700";
+    const nameEl=document.createElement("div");nameEl.className="font-medium";nameEl.textContent=p.val().username;
+    const sub=document.createElement("div");sub.className="text-xs text-zinc-400";sub.textContent="Добавить в контакты";
+    button.append(nameEl,sub);button.onclick=()=>addContact(uid,p.val().username);$("searchResult").appendChild(button);
+  }catch(e){status("searchStatus","Поиск не удался: "+errorText(e),true);}
+}
+async function addContact(uid,username){
+  try{
+    // Contacts are stored only in the current user's list; a client cannot edit another user's contacts.
+    await db.ref("contacts/"+currentUser.id+"/"+uid).set(true);
+    status("searchStatus","");
+  }catch(e){status("searchStatus","Не удалось добавить контакт: "+errorText(e),true);}
+}
+function selectContact(uid,username,avatarColor="#60a5fa"){
+  activePage="chats";
+  detachMessages();selectedUser={id:uid,username,avatarColor};
+  const chatAvatar=$("chatAvatar");chatAvatar.classList.remove("hidden");chatAvatar.textContent=avatarInitial(username);chatAvatar.style.backgroundColor=avatarColors.includes(avatarColor)?avatarColor:"#60a5fa";
+  $("chatTitle").textContent=username;$("chatSubtitle").textContent=({en:"Chat with ",ru:"Переписка с ",az:"Söhbət: ",es:"Chat con "})[currentLanguage]+username;
+  $("contactsPane").classList.add("hidden");$("chatPane").classList.remove("hidden");$("backToContacts").classList.remove("hidden");
+  $("messageInput").disabled=false;$("sendButton").disabled=false;$("directImageButton").disabled=false;
+  const [firstUid,secondUid]=chatPath(currentUser.id,uid);
+  const ref=db.ref("chats/"+firstUid+"/"+secondUid+"/messages");
+  messagesRef=ref;
+  messagesListener=messagesRef.limitToLast(200).on("value",snap=>{
+    const list=$("messagesList");list.replaceChildren();
+    snap.forEach(child=>{
+      const m=child.val()||{}, item=document.createElement("div");
+      item.className="message p-3 rounded-2xl "+(m.sender===currentUser.id?"mine":"theirs");
+      const body=document.createElement("div");if(m.image){const img=document.createElement("img");img.src=m.image;img.alt="Фото";img.loading="lazy";img.className="max-w-full rounded-xl max-h-72 object-contain";body.appendChild(img);}if(m.text){const caption=document.createElement("div");caption.textContent=m.text;body.appendChild(caption);}
+      const meta=document.createElement("div");meta.className="text-xs opacity-70 mt-1";meta.textContent=(m.sender===currentUser.id?tr("you"):username);
+      item.append(body,meta);list.appendChild(item);
+    });
+    list.scrollTop=list.scrollHeight;
+  },e=>status("searchStatus","Не удалось загрузить сообщения: "+errorText(e),true));
+  loadContacts();
+}
+
+$("backToContacts").addEventListener("click",()=>{
+  selectedUser=null;detachMessages();$("chatAvatar").classList.add("hidden");$("chatPane").classList.add("hidden");$("contactsPane").classList.remove("hidden");
+  $("backToContacts").classList.add("hidden");setPage("chats");
+});
+$("messageForm").addEventListener("submit",async e=>{
+  e.preventDefault();if(!currentUser||!selectedUser)return;
+  const text=$("messageInput").value.trim();if(!text)return;
+  $("sendButton").disabled=true;
+  try{
+    const [firstUid,secondUid]=chatPath(currentUser.id,selectedUser.id);
+    await db.ref("chats/"+firstUid+"/"+secondUid+"/messages").push({sender:currentUser.id,text,createdAt:firebase.database.ServerValue.TIMESTAMP});
+    $("messageInput").value="";
+  }catch(e){status("searchStatus","Сообщение не отправлено: "+errorText(e),true);}
+  finally{$("sendButton").disabled=false;}
+});
+$("diagnosticButton").addEventListener("click", async ()=>{
+  const b=$("diagnosticButton"); b.disabled=true; b.textContent="Проверяем...";
+  try {
+    if (auth.currentUser) {
+      status("authStatus","Аккаунт авторизован. Проверяем чтение профиля из Realtime Database...");
+      try {
+        const snap = await withTimeout(db.ref("users/"+auth.currentUser.uid).get(), 10000, "TIMEOUT_DB: база не ответила за 10 секунд.");
+        status("authStatus", snap.exists() ? "Успех: Authentication и Realtime Database работают, профиль найден." : "Вход в Authentication работает, но профиля users/UID нет. Введи имя пользователя и нажми «Войти», чтобы восстановить профиль.", !snap.exists());
+      } catch(dbErr) {
+        status("authStatus", errorText(dbErr) + (dbErr && dbErr.code ? " ["+dbErr.code+"]" : ""), true);
+      }
+    } else {
+      const authCheck = await withTimeout(fetch("https://identitytoolkit.googleapis.com/v1/projects?key="+encodeURIComponent(firebaseConfig.apiKey)), 10000, "TIMEOUT_AUTH: браузер не получил ответ от Firebase Authentication за 10 секунд.");
+      status("authStatus", "Сервисный endpoint ответил (HTTP "+authCheck.status+"). Это проверяет только доступность API, а не вход с паролем. Если вход зависает, открой HTML через HTTPS-хостинг и добавь его домен в Firebase Authentication → Settings → Authorized domains.");
+    }
+  } catch(e) {
+    status("authStatus", errorText(e) + (e && e.code ? " ["+e.code+"]" : ""), true);
+  } finally { b.disabled=false; b.textContent="Проверить подключение"; }
+});
+document.querySelectorAll(".nav-btn").forEach(b=>b.addEventListener("click",()=>setPage(b.dataset.page)));
+document.querySelectorAll(".language-btn").forEach(b=>b.addEventListener("click",()=>applyLanguage(b.dataset.lang)));
+applyLanguage(currentLanguage);
+$("saveProfileButton").addEventListener("click",changeUsername);
+$("profileNameInput").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();changeUsername();}});
+$("loginButton").addEventListener("click",login);
+$("registerButton").addEventListener("click",register);
+$("searchButton").addEventListener("click",searchUser);
+$("searchInput").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();searchUser();}});
+$("logoutButton").addEventListener("click",()=>auth.signOut());
+</script>
+</body>
+</html>
